@@ -1,0 +1,490 @@
+// Sterling Search - Prisma Schema
+// Generator and datasource
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  memoryEnabled Boolean   @default(true)
+
+  // NextAuth relations
+  accounts      Account[]
+  sessions      Session[]
+
+  // App relations
+  savedItems          SavedItem[]
+  folders             Folder[]
+  topics              Topic[]
+  tags                Tag[]
+  memoryEntries       MemoryEntry[]
+  searchQueries       SearchQuery[]
+  assistantMessages   AssistantMessage[]
+  browserSpaces       BrowserSpace[]
+  trafficRules        TrafficRule[]
+  whiteboards         Whiteboard[]
+  agentTasks          AgentTask[]
+  integrationAccounts IntegrationAccount[]
+  dailyBriefs         DailyBrief[]
+  todoItems           TodoItem[]
+  reports             Report[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────
+// SAVED ITEMS
+// ─────────────────────────────────────────
+
+enum ItemType {
+  LINK
+  PDF
+  IMAGE
+  VIDEO
+  AUDIO
+  NOTE
+  SCREENSHOT
+  DOWNLOAD
+}
+
+model SavedItem {
+  id               String    @id @default(cuid())
+  userId           String
+  title            String
+  description      String?   @db.Text
+  type             ItemType
+  mimeType         String?
+  source           String?
+  url              String?   @db.Text
+  contentText      String?   @db.Text
+  fileKey          String?
+  fileSize         Int?
+  embedding        Float[]
+  hash             String?
+  topics           String[]
+  tags             String[]
+  suggestedFolder  String?
+  suggestedSubfolder String?
+  isStarred        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  savedAt          DateTime  @default(now())
+  archivedAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, type])
+  @@index([userId, isStarred])
+  @@index([userId, savedAt])
+  @@map("saved_items")
+}
+
+// ─────────────────────────────────────────
+// ORGANIZATION
+// ─────────────────────────────────────────
+
+model Folder {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  parentId    String?
+  description String?
+  color       String?
+  icon        String?
+  itemCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent Folder?  @relation("FolderChildren", fields: [parentId], references: [id])
+  children Folder[] @relation("FolderChildren")
+
+  @@index([userId])
+  @@index([userId, parentId])
+  @@map("folders")
+}
+
+model Topic {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  parent    String?
+  count     Int      @default(0)
+  subs      String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("topics")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("tags")
+}
+
+// ─────────────────────────────────────────
+// MEMORY & SEARCH
+// ─────────────────────────────────────────
+
+model MemoryEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String   @db.Text
+  source    String?
+  tags      String[]
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("memory_entries")
+}
+
+model SearchQuery {
+  id          String   @id @default(cuid())
+  userId      String
+  query       String
+  resultCount Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("search_queries")
+}
+
+// ─────────────────────────────────────────
+// ASSISTANT
+// ─────────────────────────────────────────
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+model AssistantMessage {
+  id        String      @id @default(cuid())
+  userId    String
+  role      MessageRole
+  content   String      @db.Text
+  citations Json?
+  createdAt DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("assistant_messages")
+}
+
+// ─────────────────────────────────────────
+// BROWSER
+// ─────────────────────────────────────────
+
+model BrowserSpace {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tabs        Json     @default("[]")
+  pinnedTabs  Json     @default("[]")
+  tabGroups   Json     @default("[]")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  browserTabs  BrowserTab[]
+  tabGroupsRel TabGroup[]
+  trafficRules TrafficRule[]
+
+  @@index([userId])
+  @@map("browser_spaces")
+}
+
+model BrowserTab {
+  id         String    @id @default(cuid())
+  spaceId    String
+  title      String
+  url        String    @db.Text
+  favicon     String?
+  isPinned   Boolean   @default(false)
+  isArchived Boolean   @default(false)
+  groupId    String?
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  space BrowserSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@map("browser_tabs")
+}
+
+model TabGroup {
+  id        String   @id @default(cuid())
+  spaceId   String
+  name      String
+  color     String?
+  tabCount  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  space BrowserSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@map("tab_groups")
+}
+
+model TrafficRule {
+  id        String   @id @default(cuid())
+  userId    String
+  pattern   String
+  spaceId   String
+  priority  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  space BrowserSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("traffic_rules")
+}
+
+// ─────────────────────────────────────────
+// WHITEBOARD
+// ─────────────────────────────────────────
+
+model Whiteboard {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  items       Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  whiteboardItems WhiteboardItem[]
+
+  @@index([userId])
+  @@map("whiteboards")
+}
+
+enum WhiteboardItemType {
+  NOTE
+  LINK
+  IMAGE
+  SKETCH
+}
+
+model WhiteboardItem {
+  id           String             @id @default(cuid())
+  whiteboardId String
+  type         WhiteboardItemType
+  content      String?            @db.Text
+  x            Float
+  y            Float
+  width        Float
+  height       Float
+  color        String?
+  rotation     Float              @default(0)
+  createdAt    DateTime           @default(now())
+
+  whiteboard Whiteboard @relation(fields: [whiteboardId], references: [id], onDelete: Cascade)
+
+  @@index([whiteboardId])
+  @@map("whiteboard_items")
+}
+
+// ─────────────────────────────────────────
+// AGENT TASKS
+// ─────────────────────────────────────────
+
+enum TaskStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  CANCELLED
+}
+
+model AgentTask {
+  id        String     @id @default(cuid())
+  userId    String
+  title     String
+  status    TaskStatus @default(QUEUED)
+  step      String?
+  progress  Int        @default(0)
+  result    String?    @db.Text
+  log       Json       @default("[]")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("agent_tasks")
+}
+
+// ─────────────────────────────────────────
+// INTEGRATIONS
+// ─────────────────────────────────────────
+
+enum IntegrationProvider {
+  GMAIL
+  GOOGLE_DRIVE
+  NOTION
+  SLACK
+  GITHUB
+  CALENDAR
+  DROPBOX
+}
+
+model IntegrationAccount {
+  id           String              @id @default(cuid())
+  userId       String
+  provider     IntegrationProvider
+  accessToken  String?             @db.Text
+  refreshToken String?             @db.Text
+  isActive     Boolean             @default(true)
+  indexing     Boolean             @default(false)
+  lastSync     DateTime?
+  createdAt    DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("integration_accounts")
+}
+
+// ─────────────────────────────────────────
+// DAILY BRIEF
+// ─────────────────────────────────────────
+
+model DailyBrief {
+  id               String   @id @default(cuid())
+  userId           String
+  date             DateTime @db.Date
+  priorities       Json     @default("[]")
+  calendarEvents   Json     @default("[]")
+  inboxHighlights  Json     @default("[]")
+  savedCount       Int      @default(0)
+  memoryCount      Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("daily_briefs")
+}
+
+// ─────────────────────────────────────────
+// TODOS
+// ─────────────────────────────────────────
+
+model TodoItem {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  isDone    Boolean   @default(false)
+  source    String?
+  dueAt     DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isDone])
+  @@map("todo_items")
+}
+
+// ─────────────────────────────────────────
+// REPORTS
+// ─────────────────────────────────────────
+
+model Report {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  summary     String   @db.Text
+  content     String   @db.Text
+  topicId     String?
+  sourceCount Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("reports")
+}
